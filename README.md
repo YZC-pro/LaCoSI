@@ -15,3 +15,22 @@ For action-value estimation, the 64-dimensional recurrent feature, 64-dimensiona
 ### Optimization
 
 The three objectives optimize distinct components of LaCoSI. \(\mathcal{L}_{\mathrm{CB}}\) updates the student latent coordination network, \(\mathcal{L}_{\mathrm{CVoI}}\) updates only the information-value estimator \(F_\phi\), and \(\mathcal{L}_{\mathrm{RL}}\) optimizes the message encoder, individual action-value network, and mixing network. The teacher coordination network is updated by exponential moving average, while the target action-value and mixing networks are updated using the standard target-network update.
+
+
+### Counterfactual Value Normalization
+
+The raw counterfactual value
+\[
+d_i^t=[V_+^t-V_{-i}^t]_+
+\]
+is non-negative but unbounded. We normalize it to \([0,1]\) using a
+running 95th-percentile scale \(s_d\):
+\[
+\tilde d_i^t=
+\operatorname{clip}
+\left(
+\frac{d_i^t}{s_d+\epsilon},0,1
+\right).
+\]
+The estimator predicts \(\tilde d_i^t\) with a sigmoid output, and the
+receiver-side gate is computed by thresholding the normalized prediction.
