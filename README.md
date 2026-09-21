@@ -3,6 +3,7 @@ Official implementation of LaCoSI. This repository currently provides a partial 
 
 
 ## Network Architecture
+The above dimensions correspond to our implementation. LaCoSI mainly specifies the coordination and information-incorporation mechanism rather than a fixed network architecture, and the network sizes can be adapted to the requirements of different tasks.
 
 LaCoSI keeps the original agent backbone, latent coordination learner, message encoder, individual Q network, and QMIX mixer, and only introduces a lightweight CVoI estimator. Each agent encodes its 204-dimensional observation into a 64-dimensional feature, followed by a GRUCell with hidden size 64. The latent coordination module uses a teacher--student architecture: the view network is \(204 \rightarrow 128 \rightarrow 64\), followed by a projection network \(64 \rightarrow 64 \rightarrow 16\) that outputs the latent coordination distribution. The inferred coordination category is mapped to a 4-dimensional embedding and further encoded by an MLP \(4 \rightarrow 64 \rightarrow 64\).
 
