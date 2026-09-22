@@ -1,33 +1,91 @@
-# LaCoSI
-Official implementation of LaCoSI. This repository currently provides a partial release of the code. The complete implementation will be made publicly available upon acceptance of the paper.
-
-
 ## Network Architecture
-The above dimensions correspond to our implementation. LaCoSI mainly specifies the coordination and information-incorporation mechanism rather than a fixed network architecture, and the network sizes can be adapted to the requirements of different tasks.
 
-LaCoSI keeps the original agent backbone, latent coordination learner, message encoder, individual Q network, and QMIX mixer, and only introduces a lightweight CVoI estimator. Each agent encodes its 204-dimensional observation into a 64-dimensional feature, followed by a GRUCell with hidden size 64. The latent coordination module uses a teacher--student architecture: the view network is \(204 \rightarrow 128 \rightarrow 64\), followed by a projection network \(64 \rightarrow 64 \rightarrow 16\) that outputs the latent coordination distribution. The inferred coordination category is mapped to a 4-dimensional embedding and further encoded by an MLP \(4 \rightarrow 64 \rightarrow 64\).
+The above dimensions correspond to our implementation. LaCoSI mainly
+specifies the coordination and information-incorporation mechanism rather
+than a fixed network architecture, and the network sizes can be adapted
+to the requirements of different tasks.
 
-Teammate messages are generated from the 64-dimensional recurrent hidden state using a \(64 \rightarrow 16\) linear layer with Tanh, and messages from other available agents are mean-pooled into a 16-dimensional candidate representation \(\tilde m_i^t\). The CVoI estimator takes the two-dimensional latent coordination statistics \(\xi_i^t=[u_i^t,v_i^t]\) and uses an MLP \(2 \rightarrow 16 \rightarrow 1\) to predict the scalar information value \(\hat d_i^t\), which determines the receiver-side gate.
+LaCoSI keeps the original agent backbone, latent coordination learner,
+message encoder, individual Q network, and QMIX mixer, and introduces
+only a lightweight local incorporation estimator. Each agent encodes its
+204-dimensional observation into a 64-dimensional feature, followed by a
+GRUCell with hidden size 64. The latent coordination module uses a
+teacher--student architecture: the view network is
+\(204 \rightarrow 128 \rightarrow 64\), followed by a projection network
+\(64 \rightarrow 64 \rightarrow 16\) that outputs the latent coordination
+distribution. The inferred coordination category is mapped to a
+4-dimensional embedding and further encoded by an MLP
+\(4 \rightarrow 64 \rightarrow 64\).
 
-For action-value estimation, the 64-dimensional recurrent feature, 64-dimensional coordination feature, and 16-dimensional gated teammate representation are concatenated into a 144-dimensional input, which is mapped to 18 action values by the individual Q head. The target Q head has the same architecture and is reused in the counterfactual branch under information-present and information-absent message inputs. The centralized value function follows QMIX with hidden size 64; the target mixer evaluates the corresponding individual-value vectors together with the global state to obtain \(V_+^t\) and \(V_{-i}^t\), from which \(d_i^t=[V_+^t-V_{-i}^t]_+\) is constructed. Thus, the only additional learnable module introduced by the new mechanism is the CVoI estimator \(2 \rightarrow 16 \rightarrow 1\); the counterfactual branch reuses the existing target Q and target mixing networks.
+Teammate messages are generated from the 64-dimensional recurrent hidden
+state using a \(64 \rightarrow 16\) linear layer with Tanh, and messages
+from other available agents are mean-pooled into a 16-dimensional
+candidate representation \(\tilde m_i^t\). The local incorporation
+estimator takes the two-dimensional latent coordination statistics
+\(\xi_i^t=[u_i^t,v_i^t]\) and uses an MLP
+\(2 \rightarrow 16 \rightarrow 1\) to predict the incorporation score
+\(\hat d_i^t\), which determines the receiver-side gate.
 
-QMIX Monotonic Mixing
+For action-value estimation, the 64-dimensional recurrent feature,
+64-dimensional coordination feature, and 16-dimensional gated teammate
+representation are concatenated into a 144-dimensional input, which is
+mapped to 18 action values by the individual Q head. The target Q head
+has the same architecture and is evaluated under information-present and
+information-absent inputs when constructing the centralized incorporation
+target. The centralized value function follows QMIX with hidden size 64.
+For each receiver \(i\), the target mixer evaluates the corresponding
+individual-value vectors together with the global state to obtain
+\(V_{+i}^t\) and \(V_{-i}^t\), from which the incorporation target
+\(d_i^t=[V_{+i}^t-V_{-i}^t]_+\) is constructed. Thus, the only additional
+learnable module introduced by the selective incorporation mechanism is
+the local estimator \(2 \rightarrow 16 \rightarrow 1\); construction of
+the supervision target reuses the existing target Q and target mixing
+networks.
 
-LaCoSI follows the standard QMIX architecture for centralized value factorization. The mixing network is monotonic with respect to each individual action value, i.e., \(\partial Q_{\mathrm{tot}}/\partial Q_i \ge 0\), with non-negative mixing weights generated by state-conditioned hypernetworks. Therefore, the greedy joint action can be obtained from the individual greedy actions of all agents without enumerating the joint-action space. In practice, each agent independently selects its greedy action, and the corresponding individual Q values are passed to the target mixing network to compute the TD target.
 
-The same monotonicity property is used in the counterfactual value construction. For each receiver, the target individual Q network is evaluated under both information-present and information-absent conditions, and the resulting individually maximized Q values are assembled into \(\mathbf q_+^t\) and \(\mathbf q_{-i}^t\). These vectors are then evaluated by the same target QMIX mixer to obtain \(V_+^t\) and \(V_{-i}^t\). Thus, the counterfactual construction does not require exponential joint-action enumeration and remains consistent with the standard QMIX factorized greedy action selection.
+### QMIX Monotonic Mixing
+
+LaCoSI follows the standard QMIX architecture for centralized value
+factorization. The mixing network is monotonic with respect to each
+individual action value, i.e.,
+\(\partial Q_{\mathrm{tot}}/\partial Q_i \ge 0\), with non-negative
+mixing weights generated by state-conditioned hypernetworks. Therefore,
+the greedy joint action can be obtained from the individual greedy
+actions of all agents without enumerating the joint-action space. In
+practice, each agent independently selects its greedy action, and the
+corresponding individual Q values are passed to the target mixing network
+to compute the TD target.
+
+The same monotonicity property is used when constructing the centralized
+incorporation target. For receiver \(i\), the target individual Q network
+is evaluated under both information-present and information-absent
+conditions, while the information conditions of the other agents remain
+unchanged. The resulting individually maximized Q values are assembled
+into \(\mathbf q_{+i}^t\) and \(\mathbf q_{-i}^t\), which differ only in
+the information condition of receiver \(i\). These vectors are evaluated
+by the same target QMIX mixer to obtain \(V_{+i}^t\) and \(V_{-i}^t\).
+Thus, construction of the incorporation target does not require
+exponential joint-action enumeration and remains consistent with the
+standard QMIX factorized greedy action selection.
 
 
 ### Optimization
 
-The three objectives optimize distinct components of LaCoSI. \(\mathcal{L}_{\mathrm{CB}}\) updates the student latent coordination network, \(\mathcal{L}_{\mathrm{CVoI}}\) updates only the information-value estimator \(F_\phi\), and \(\mathcal{L}_{\mathrm{RL}}\) optimizes the message encoder, individual action-value network, and mixing network. The teacher coordination network is updated by exponential moving average, while the target action-value and mixing networks are updated using the standard target-network update.
+The three objectives optimize distinct components of LaCoSI.
+\(\mathcal{L}_{\mathrm{CB}}\) updates the student latent coordination
+network, \(\mathcal{L}_{\mathrm{inc}}\) updates only the local
+incorporation estimator \(F_\phi\), and \(\mathcal{L}_{\mathrm{RL}}\)
+optimizes the message encoder, individual action-value network, and
+mixing network. The teacher coordination network is updated by
+exponential moving average, while the target action-value and mixing
+networks follow the standard target-network update.
 
 
-### Counterfactual Value Normalization
+### Incorporation Target Normalization
 
-The raw counterfactual value
+The raw incorporation target
 \[
-d_i^t=[V_+^t-V_{-i}^t]_+
+d_i^t=[V_{+i}^t-V_{-i}^t]_+
 \]
 is non-negative but unbounded. We normalize it to \([0,1]\) using a
 running 95th-percentile scale \(s_d\):
@@ -38,5 +96,6 @@ running 95th-percentile scale \(s_d\):
 \frac{d_i^t}{s_d+\epsilon},0,1
 \right).
 \]
-The estimator predicts \(\tilde d_i^t\) with a sigmoid output, and the
-receiver-side gate is computed by thresholding the normalized prediction.
+The local estimator predicts the normalized incorporation target
+\(\tilde d_i^t\) with a sigmoid output, and the receiver-side gate is
+computed by thresholding the predicted incorporation score.
