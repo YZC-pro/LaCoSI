@@ -45,6 +45,10 @@ the local estimator \(2 \rightarrow 16 \rightarrow 1\); construction of
 the supervision target reuses the existing target Q and target mixing
 networks.
 
+For the latent coordination representation, we set the number of latent
+categories to $K=4$, the student temperature to $0.1$, the teacher
+temperature to $0.04$, the teacher EMA coefficient to $0.996$, and the
+centering EMA coefficient to $0.9$. 
 
 ### QMIX Monotonic Mixing
 
@@ -82,6 +86,8 @@ optimizes the message encoder, individual action-value network, and
 mixing network. The teacher coordination network is updated by
 exponential moving average, while the target action-value and mixing
 networks follow the standard target-network update.
+
+
 
 
 ### Incorporation Target Normalization
